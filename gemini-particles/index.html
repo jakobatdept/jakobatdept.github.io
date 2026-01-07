@@ -3,57 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Gesture Particle System</title>
+    <title>3D Gesture Particle System - Pro</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
 
-        /* Modern UI Overlay */
         #ui-panel {
             position: absolute;
             top: 20px;
             left: 20px;
             background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 20px;
-            border-radius: 15px;
+            backdrop-filter: blur(15px);
+            padding: 25px;
+            border-radius: 20px;
             color: white;
             border: 1px solid rgba(255, 255, 255, 0.2);
             z-index: 100;
-            width: 250px;
+            width: 280px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
         }
 
-        h2 { margin: 0 0 15px 0; font-size: 18px; font-weight: 300; letter-spacing: 2px; }
-        .control-group { margin-bottom: 15px; }
-        label { display: block; font-size: 12px; margin-bottom: 5px; opacity: 0.8; }
+        h2 { margin: 0 0 20px 0; font-size: 16px; font-weight: 600; letter-spacing: 3px; color: #fff; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
+        .control-group { margin-bottom: 20px; }
+        label { display: block; font-size: 10px; margin-bottom: 8px; opacity: 0.7; letter-spacing: 1px; }
         
         select, input[type="color"] {
             width: 100%;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.2);
             color: white;
-            padding: 8px;
-            border-radius: 5px;
+            padding: 10px;
+            border-radius: 8px;
             cursor: pointer;
+            outline: none;
+            transition: 0.3s;
         }
+        select:hover { background: rgba(255,255,255,0.1); }
 
-        .status {
-            font-size: 11px;
+        .status-container {
+            background: rgba(0,0,0,0.2);
+            padding: 12px;
+            border-radius: 10px;
             margin-top: 10px;
-            color: #4af;
         }
+        .status { font-size: 11px; margin-bottom: 5px; color: #4af; font-weight: bold; }
+        .hint { font-size: 10px; opacity: 0.5; line-height: 1.4; }
 
-        /* Video Feed (Hidden) */
         #video-container {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            width: 160px;
-            height: 120px;
-            border-radius: 10px;
+            width: 180px;
+            height: 135px;
+            border-radius: 15px;
             overflow: hidden;
             border: 2px solid rgba(255,255,255,0.2);
             transform: scaleX(-1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
         video { width: 100%; height: 100%; object-fit: cover; }
     </style>
@@ -61,28 +67,32 @@
 <body>
 
     <div id="ui-panel">
-        <h2>PARTICLE CORE</h2>
+        <h2>3D Particle Core</h2>
         
         <div class="control-group">
-            <label>SHAPE TEMPLATE</label>
+            <label>GEOMETRY TEMPLATE</label>
             <select id="shapeSelect">
-                <option value="sphere">Sphere</option>
-                <option value="heart">Heart</option>
-                <option value="flower">Lotus Flower</option>
-                <option value="saturn">Saturn</option>
-                <option value="knot">Torus Knot (Complex)</option>
-                <option value="fireworks">Fireworks</option>
+                <option value="sphere">Celestial Sphere</option>
+                <option value="heart">Floating Heart</option>
+                <option value="flower">Lotus Bloom</option>
+                <option value="saturn">Planet Saturn</option>
+                <option value="knot">Torus Knot</option>
+                <option value="fireworks">Supernova</option>
             </select>
         </div>
 
         <div class="control-group">
-            <label>PARTICLE COLOR</label>
-            <input type="color" id="colorPicker" value="#00ffff">
+            <label>CORE COLOR</label>
+            <input type="color" id="colorPicker" value="#00f2ff">
         </div>
 
-        <div class="status" id="handStatus">Initializing Camera...</div>
-        <div style="font-size: 10px; margin-top: 10px; opacity: 0.5;">
-            TIP: Use TWO hands. Move them apart/together to scale.
+        <div class="status-container">
+            <div class="status" id="handStatus">System Initializing...</div>
+            <div class="hint">
+                • <b>Distance:</b> Stretch hands to scale<br>
+                • <b>Position:</b> Move hands to tilt X/Y<br>
+                • <b>Angle:</b> Rotate hands like a wheel to spin
+            </div>
         </div>
     </div>
 
@@ -90,33 +100,33 @@
         <video id="input_video"></video>
     </div>
 
-    <!-- Load Three.js and MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script>
-        // --- Configuration ---
-        const PARTICLE_COUNT = 15000;
-        let currentShape = 'sphere';
+        // --- State Management ---
+        const PARTICLE_COUNT = 18000;
         let targetScale = 1;
         let currentScale = 1;
+        let targetRot = { x: 0, y: 0, z: 0 };
+        let currentRot = { x: 0, y: 0, z: 0 };
         
         // --- Three.js Setup ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        camera.position.z = 5;
+        camera.position.z = 4;
 
-        // Particle Geometry
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(PARTICLE_COUNT * 3);
         const targetPositions = new Float32Array(PARTICLE_COUNT * 3);
-        const colors = new Float32Array(PARTICLE_COUNT * 3);
 
+        // Initial Random Cloud
         for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
             positions[i] = (Math.random() - 0.5) * 10;
             targetPositions[i] = positions[i];
@@ -125,8 +135,10 @@
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         
         const material = new THREE.PointsMaterial({
-            size: 0.015,
+            size: 0.012,
+            color: 0x00f2ff,
             transparent: true,
+            opacity: 0.8,
             blending: THREE.AdditiveBlending,
             depthWrite: false
         });
@@ -135,7 +147,7 @@
         scene.add(particleSystem);
 
         // --- Shape Generators ---
-        function updateShape(type) {
+        function generateShape(type) {
             const pos = targetPositions;
             for (let i = 0; i < PARTICLE_COUNT; i++) {
                 const i3 = i * 3;
@@ -150,46 +162,45 @@
                 } 
                 else if (type === 'heart') {
                     const t = Math.random() * Math.PI * 2;
-                    x = 16 * Math.pow(Math.sin(t), 3) / 10;
-                    y = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) / 10;
-                    z = (Math.random() - 0.5) * 0.5;
+                    x = 16 * Math.pow(Math.sin(t), 3) / 13;
+                    y = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) / 13;
+                    z = (Math.random() - 0.5) * 0.4;
                 }
                 else if (type === 'flower') {
                     const t = (i / PARTICLE_COUNT) * Math.PI * 20;
-                    const r = Math.sin(1.2 * t);
+                    const r = Math.sin(1.5 * t);
                     x = r * Math.cos(t);
                     y = r * Math.sin(t);
-                    z = t / 20;
+                    z = Math.cos(t * 0.5) * 0.5;
                 }
                 else if (type === 'saturn') {
-                    if (i < PARTICLE_COUNT * 0.5) {
+                    if (i < PARTICLE_COUNT * 0.4) {
                         const phi = Math.random() * Math.PI * 2;
                         const theta = Math.random() * Math.PI;
-                        x = 0.6 * Math.cos(phi) * Math.sin(theta);
-                        y = 0.6 * Math.sin(phi) * Math.sin(theta);
-                        z = 0.6 * Math.cos(theta);
+                        x = 0.5 * Math.cos(phi) * Math.sin(theta);
+                        y = 0.5 * Math.sin(phi) * Math.sin(theta);
+                        z = 0.5 * Math.cos(theta);
                     } else {
-                        const r = 0.8 + Math.random() * 0.5;
+                        const r = 0.8 + Math.random() * 0.6;
                         const angle = Math.random() * Math.PI * 2;
                         x = r * Math.cos(angle);
-                        y = r * Math.sin(angle) * 0.2;
+                        y = (Math.random() - 0.5) * 0.05;
                         z = r * Math.sin(angle);
                     }
                 }
                 else if (type === 'knot') {
                     const t = (i / PARTICLE_COUNT) * Math.PI * 2 * 10;
-                    x = (2 + Math.cos(3 * t)) * Math.cos(2 * t) / 2;
-                    y = (2 + Math.cos(3 * t)) * Math.sin(2 * t) / 2;
-                    z = Math.sin(3 * t) / 2;
+                    x = (1.5 + Math.cos(3 * t)) * Math.cos(2 * t) / 1.5;
+                    y = (1.5 + Math.cos(3 * t)) * Math.sin(2 * t) / 1.5;
+                    z = Math.sin(3 * t) / 1.5;
                 }
                 else { // Fireworks
-                    const r = Math.random();
+                    const r = Math.pow(Math.random(), 0.5) * 2;
                     const theta = Math.random() * Math.PI * 2;
                     const phi = Math.random() * Math.PI;
                     x = r * Math.sin(phi) * Math.cos(theta);
                     y = r * Math.sin(phi) * Math.sin(theta);
                     z = r * Math.cos(phi);
-                    if (i % 2 === 0) { x *= 2; y *= 2; z *= 2; }
                 }
 
                 pos[i3] = x;
@@ -198,34 +209,44 @@
             }
         }
 
-        updateShape('sphere');
+        generateShape('sphere');
 
-        // --- Hand Tracking Logic ---
+        // --- Hand Tracking & Logic ---
         const videoElement = document.getElementById('input_video');
         const statusText = document.getElementById('handStatus');
 
         function onResults(results) {
             if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
-                statusText.innerText = "Two Hands Detected: Scaling Active";
-                statusText.style.color = "#4fff4a";
+                statusText.innerText = "Full Control Active";
+                statusText.style.color = "#00ffcc";
 
-                // Get center of hand 1 and hand 2
-                const h1 = results.multiHandLandmarks[0][9]; // Middle finger mcp
-                const h2 = results.multiHandLandmarks[1][9];
+                const h1 = results.multiHandLandmarks[0][9]; // Palm center hand 1
+                const h2 = results.multiHandLandmarks[1][9]; // Palm center hand 2
 
-                // Calculate Euclidean distance
+                // 1. Calculate Scaling (Distance)
                 const dx = h1.x - h2.x;
                 const dy = h1.y - h2.y;
                 const distance = Math.sqrt(dx*dx + dy*dy);
+                targetScale = THREE.MathUtils.mapLinear(distance, 0.1, 0.7, 0.4, 4.0);
 
-                // Map distance to scale (approx 0.1 to 0.7 screen width)
-                targetScale = THREE.MathUtils.mapLinear(distance, 0.1, 0.6, 0.5, 4.0);
-            } else if (results.multiHandLandmarks && results.multiHandLandmarks.length === 1) {
-                statusText.innerText = "One Hand Detected: Use two to scale";
-                statusText.style.color = "#ffcc00";
+                // 2. Calculate X/Y Rotation (Midpoint position)
+                // Midpoint ranges 0 to 1. Map to -Math.PI to Math.PI
+                const midX = (h1.x + h2.x) / 2;
+                const midY = (h1.y + h2.y) / 2;
+                targetRot.y = (midX - 0.5) * Math.PI * 2;
+                targetRot.x = (midY - 0.5) * Math.PI * 2;
+
+                // 3. Calculate Z Rotation (Angle between hands)
+                // atan2 returns angle in radians
+                targetRot.z = Math.atan2(h2.y - h1.y, h2.x - h1.x);
+
             } else {
-                statusText.innerText = "No Hands Detected";
+                statusText.innerText = results.multiHandLandmarks.length === 1 ? 
+                    "Need Second Hand" : "Waiting for Hands...";
                 statusText.style.color = "#ff4a4a";
+                // Slowly return to neutral rotation if hands lost
+                targetRot.x *= 0.95;
+                targetRot.y *= 0.95;
             }
         }
 
@@ -236,48 +257,45 @@
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
         });
         hands.onResults(onResults);
 
         const cameraFeed = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 640,
-            height: 480
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
         });
         cameraFeed.start();
 
-        // --- UI Events ---
-        document.getElementById('shapeSelect').addEventListener('change', (e) => {
-            currentShape = e.target.value;
-            updateShape(currentShape);
-        });
-
-        document.getElementById('colorPicker').addEventListener('input', (e) => {
-            particleSystem.material.color.set(e.target.value);
-        });
+        // --- UI Listeners ---
+        document.getElementById('shapeSelect').addEventListener('change', (e) => generateShape(e.target.value));
+        document.getElementById('colorPicker').addEventListener('input', (e) => material.color.set(e.target.value));
 
         // --- Animation Loop ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Morph particles toward target positions
-            const positions = geometry.attributes.position.array;
+            // 1. Morph Particles
+            const posAttr = geometry.attributes.position.array;
             for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
-                positions[i] += (targetPositions[i] - positions[i]) * 0.1;
+                posAttr[i] += (targetPositions[i] - posAttr[i]) * 0.1;
             }
             geometry.attributes.position.needsUpdate = true;
 
-            // Smooth scale transition
+            // 2. Smooth Scale
             currentScale += (targetScale - currentScale) * 0.1;
             particleSystem.scale.set(currentScale, currentScale, currentScale);
 
-            // Subtle rotation
-            particleSystem.rotation.y += 0.005;
-            particleSystem.rotation.x += 0.002;
+            // 3. Smooth Rotation (Lerp)
+            currentRot.x += (targetRot.x - currentRot.x) * 0.1;
+            currentRot.y += (targetRot.y - currentRot.y) * 0.1;
+            currentRot.z += (targetRot.z - currentRot.z) * 0.1;
+
+            particleSystem.rotation.set(currentRot.x, currentRot.y, currentRot.z);
+
+            // 4. Idle spin (adds a bit of life)
+            particleSystem.rotation.y += 0.002;
 
             renderer.render(scene, camera);
         }
